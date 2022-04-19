@@ -1,0 +1,11 @@
+{
+	"CommandBindings":{
+		"sequential":"new SequentialCommandGroup()",
+		"drive":"new DriveDistanceCommand(param)",
+		"turn" : "new TurnCommand(param)"
+	},
+	"Imports":[
+		"edu.wpi.first.wpilibj2.command.*",
+		"frc.robot.commands.autocommands.*"
+	]
+}

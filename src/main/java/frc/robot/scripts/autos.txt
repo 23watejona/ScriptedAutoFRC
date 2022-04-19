@@ -1,0 +1,18 @@
+DriveSquare
+	sequential
+		drive 150
+		turn 90
+		drive 150
+		turn 180
+		drive 150
+		turn -90
+		drive 150
+		turn 0
+DriveTriangle
+	sequential
+		drive 150
+		turn 120
+		drive 150
+		turn -60
+		drive 150
+		turn 0
