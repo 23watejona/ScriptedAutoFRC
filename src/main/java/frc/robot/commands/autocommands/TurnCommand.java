@@ -11,7 +11,7 @@ import frc.robot.subsystems.DriveSubsystem;
 public class TurnCommand extends CommandBase {
 
     private final double m_angle;
-    private final ProfiledPIDController m_turnController = new ProfiledPIDController(0.0125, 0,
+    private final ProfiledPIDController m_turnController = new ProfiledPIDController(0.000125, 0.000005,
             0, new TrapezoidProfile.Constraints(720, 720));
     // private Instant m_startTime;
 
@@ -23,14 +23,13 @@ public class TurnCommand extends CommandBase {
     public void initialize() {
       System.out.println("Running Turn Command");
         m_turnController.setGoal(m_angle);
-        m_turnController.enableContinuousInput(-180, 180);
         m_turnController.setTolerance(1);
     }
 
     public void execute() {
         double measurementAngle = DriveSubsystem.get().getHeading();
         double turnOutput = m_turnController.calculate(measurementAngle);
-        DriveSubsystem.get().arcadeDrive(0, turnOutput, -turnOutput);
+        DriveSubsystem.get().tankDrive(turnOutput, -turnOutput);
         
     }
 
@@ -39,10 +38,7 @@ public class TurnCommand extends CommandBase {
     }
 
     public boolean isFinished() {
-      if(DriveSubsystem.get().getHeading() < m_angle + 1 && DriveSubsystem.get().getHeading() > m_angle - 1){
-        return true;
-      }
-      return false;
+      return m_turnController.atGoal();
 
     }
 }

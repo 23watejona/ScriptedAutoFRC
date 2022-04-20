@@ -10,253 +10,126 @@ import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.DifferentialDriveOdometry;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
-import edu.wpi.first.wpilibj.shuffleboard.BuiltInWidgets;
-import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
-import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
+import edu.wpi.first.math.system.plant.DCMotor;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.AnalogGyro;
+import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
+import edu.wpi.first.wpilibj.simulation.AnalogGyroSim;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
+import edu.wpi.first.wpilibj.simulation.EncoderSim;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.DriveConstants;
-import frc.robot.ShuffleboardLogging;
 
-public class DriveSubsystem extends SubsystemBase implements ShuffleboardLogging {
+public class DriveSubsystem extends SubsystemBase {
         private static DriveSubsystem s_subsystem;
-        public static DriveSubsystem get(){return s_subsystem;}
 
-        //talons are the masters
-        private final TalonSRX m_masterLeft = new TalonSRX(DriveConstants.kMasterLeftPort);
-        private final TalonSRX m_masterRight = new TalonSRX(DriveConstants.kMasterRightPort);
-        private final CANSparkMax m_followerLeft = new CANSparkMax(DriveConstants.kFollowerLeftPort,
-                        MotorType.kBrushless);
-        private final CANSparkMax m_followerRight = new CANSparkMax(DriveConstants.kFollowerRightPort,
-                        MotorType.kBrushless);
+        public static DriveSubsystem get() {
+                return s_subsystem;
+        }
 
-        private final AHRS m_gyro = new AHRS(DriveConstants.kGyroPort);
-        private final DifferentialDriveOdometry m_odometry = new DifferentialDriveOdometry(
-                        Rotation2d.fromDegrees(getHeading()));
+        DifferentialDrivetrainSim m_driveSim = new DifferentialDrivetrainSim(
+                        DCMotor.getNEO(2), // 2 NEO motors on each side of the drivetrain.
+                        7.29, // 7.29:1 gearing reduction.
+                        7.5, // MOI of 7.5 kg m^2 (from CAD model).
+                        60.0, // The mass of the robot is 60 kg.
+                        Units.inchesToMeters(3), // The robot uses 3" radius wheels.
+                        0.7112, // The track width is 0.7112 meters.
+
+                        // The standard deviations for measurement noise:
+                        // x and y: 0.001 m
+                        // heading: 0.001 rad
+                        // l and r velocity: 0.1 m/s
+                        // l and r position: 0.005 m
+                        VecBuilder.fill(0, 0, 0, 0, 0, 0, 0));
+        private PWMSparkMax m_leftMotor = new PWMSparkMax(0);
+        private PWMSparkMax m_rightMotor = new PWMSparkMax(1);
+
+        // These represent our regular encoder objects, which we would
+        // create to use on a real robot.
+        private Encoder m_leftEncoder = new Encoder(0, 1);
+        private Encoder m_rightEncoder = new Encoder(2, 3);
+
+        // These are our EncoderSim objects, which we will only use in
+        // simulation. However, you do not need to comment out these
+        // declarations when you are deploying code to the roboRIO.
+        private EncoderSim m_leftEncoderSim = new EncoderSim(m_leftEncoder);
+        private EncoderSim m_rightEncoderSim = new EncoderSim(m_rightEncoder);
+
+        // Create our gyro object like we would on a real robot.
+        private AnalogGyro m_gyro = new AnalogGyro(1);
+
+        // Create the simulated gyro object, used for setting the gyro
+        // angle. Like EncoderSim, this does not need to be commented out
+        // when deploying code to the roboRIO.
+        private AnalogGyroSim m_gyroSim = new AnalogGyroSim(m_gyro);
+
+
+        private Field2d m_field = new Field2d();
+        private DifferentialDriveOdometry m_odometry = new DifferentialDriveOdometry(new Rotation2d());
 
         /**
          * Initializes a new instance of the {@link DriveSubsystem} class.
          */
         public DriveSubsystem() {
                 s_subsystem = this;
-                
-                m_masterRight.configFactoryDefault();
-                m_masterRight.setInverted(DriveConstants.kMasterRightInvert);
-                m_masterRight.setNeutralMode(NeutralMode.Brake);
-                m_masterRight.configVoltageCompSaturation(DriveConstants.kVoltageComp); 
-                m_masterRight.enableVoltageCompensation(DriveConstants.kEnableVoltageComp);
-                m_masterRight.configSupplyCurrentLimit(new SupplyCurrentLimitConfiguration(true,
-                DriveConstants.kSmartCurrentLimit, DriveConstants.kPeakCurrentLimit,
-                DriveConstants.kPeakCurrentDurationMillis));
-                m_masterRight.configOpenloopRamp(DriveConstants.kRampRate);
+                SmartDashboard.putData("Field", m_field);
 
-                m_masterLeft.configFactoryDefault();
-                m_masterLeft.setInverted(DriveConstants.kMasterLeftInvert);
-                m_masterLeft.setNeutralMode(NeutralMode.Brake);
-                m_masterLeft.configVoltageCompSaturation(DriveConstants.kVoltageComp); 
-                m_masterLeft.enableVoltageCompensation(DriveConstants.kEnableVoltageComp);
-                m_masterLeft.configSupplyCurrentLimit(new SupplyCurrentLimitConfiguration(true,
-                DriveConstants.kSmartCurrentLimit, DriveConstants.kPeakCurrentLimit,
-                DriveConstants.kPeakCurrentDurationMillis));
-                m_masterLeft.configOpenloopRamp(DriveConstants.kRampRate); 
-        
-                m_followerLeft.restoreFactoryDefaults();
-                m_followerLeft.setInverted(DriveConstants.kFollowerLeftOppose);
-                m_followerLeft.setIdleMode(IdleMode.kCoast);
-                m_followerLeft.enableVoltageCompensation(DriveConstants.kVoltageComp);
-                m_followerLeft.setSmartCurrentLimit(DriveConstants.kSmartCurrentLimit);
-                m_followerLeft.setSecondaryCurrentLimit(DriveConstants.kPeakCurrentLimit,
-                                DriveConstants.kPeakCurrentDurationMillis);
-                m_followerLeft.setOpenLoopRampRate(DriveConstants.kRampRate);
-
-                m_followerRight.restoreFactoryDefaults();
-                m_followerRight.setInverted(DriveConstants.kFollowerRightOppose);
-                m_followerRight.setIdleMode(IdleMode.kCoast);
-                m_followerRight.enableVoltageCompensation(DriveConstants.kVoltageComp);
-                m_followerRight.setSmartCurrentLimit(DriveConstants.kSmartCurrentLimit);
-                m_followerRight.setSecondaryCurrentLimit(DriveConstants.kPeakCurrentLimit,
-                                DriveConstants.kPeakCurrentDurationMillis);
-                m_followerRight.setOpenLoopRampRate(DriveConstants.kRampRate);
-
-                // m_followerLeft.follow(ExternalFollower.kFollowerPhoenix, m_masterLeft.getDeviceID());
-                // m_followerRight.follow(ExternalFollower.kFollowerPhoenix, m_masterRight.getDeviceID());
-
-                m_masterLeft.configNominalOutputForward(0);
-                m_masterLeft.configNominalOutputReverse(0);
-                m_masterLeft.configPeakOutputForward(1);
-                m_masterLeft.configPeakOutputReverse(-1);
-
-                m_masterLeft.config_kP(DriveConstants.kSlotID, DriveConstants.kP);
-                m_masterLeft.config_kI(DriveConstants.kSlotID, DriveConstants.kI);
-                m_masterLeft.config_IntegralZone(DriveConstants.kSlotID, (int) DriveConstants.kIz);
-                m_masterLeft.config_kD(DriveConstants.kSlotID, DriveConstants.kD);
-                m_masterLeft.config_kF(DriveConstants.kSlotID, DriveConstants.kFF);
-
-                m_masterRight.configNominalOutputForward(0);
-                m_masterRight.configNominalOutputReverse(0);
-                m_masterRight.configPeakOutputForward(1);
-                m_masterRight.configPeakOutputReverse(-1);
-
-                m_masterRight.config_kP(DriveConstants.kSlotID, DriveConstants.kP);
-                m_masterRight.config_kI(DriveConstants.kSlotID, DriveConstants.kI);
-                m_masterRight.config_IntegralZone(DriveConstants.kSlotID, (int) DriveConstants.kIz);
-                m_masterRight.config_kD(DriveConstants.kSlotID, DriveConstants.kD);
-                m_masterRight.config_kF(DriveConstants.kSlotID, DriveConstants.kFF);
-
-
-                //setting up the encoder stuff for the talons
-                m_masterLeft.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Absolute, 0, 10);
-                m_masterRight.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Absolute, 0, 10);
-
-                m_masterLeft.setSelectedSensorPosition(0);
-                m_masterRight.setSelectedSensorPosition(0);
-        
-                m_masterLeft.setSensorPhase(DriveConstants.kLeftSensorPhase);
-                m_masterRight.setSensorPhase(DriveConstants.kRightSensorPhase);
-
-                resetOdometry(new Pose2d(0, 0, new Rotation2d()));
         }
 
         /**
          * Update odometry
          */
         public void periodic() {
-                SmartDashboard.putNumber("Left wheel", getLeftEncoderPosition());
-                SmartDashboard.putNumber("Right wheel", getRightEncoderPosition());
-                SmartDashboard.putNumber("Heading",
-                m_odometry.getPoseMeters().getRotation().getDegrees());
-
-                m_odometry.update(Rotation2d.fromDegrees(getHeading()),
-                getLeftEncoderPosition(), getRightEncoderPosition());
-
+                m_odometry.update(m_gyro.getRotation2d(),
+                m_leftEncoder.getDistance(),
+                m_rightEncoder.getDistance());
+                m_field.setRobotPose(m_odometry.getPoseMeters());
         }
 
-        /**
-         * @return The left encoder position (meters)
-         */
-        public double getLeftEncoderPosition() {
-                return m_masterLeft.getSelectedSensorPosition(DriveConstants.kSlotID) * DriveConstants.kEncoderPositionConversionFactor;
-                
+        public void simulationPeriodic() {
+                // Set the inputs to the system. Note that we need to convert
+                // the [-1, 1] PWM signal to voltage by multiplying it by the
+                // robot controller voltage.
+                m_driveSim.setInputs(m_leftMotor.get() * RobotController.getInputVoltage(),
+                                m_rightMotor.get() * RobotController.getInputVoltage());
+
+                // Advance the model by 20 ms. Note that if you are running this
+                // subsystem in a separate thread or have changed the nominal timestep
+                // of TimedRobot, this value needs to match it.
+                m_driveSim.update(0.02);
+
+                // Update all of our sensors.
+                m_leftEncoderSim.setDistance(m_driveSim.getLeftPositionMeters());
+                m_leftEncoderSim.setRate(m_driveSim.getLeftVelocityMetersPerSecond());
+                m_rightEncoderSim.setDistance(m_driveSim.getRightPositionMeters());
+                m_rightEncoderSim.setRate(m_driveSim.getRightVelocityMetersPerSecond());
+                m_gyroSim.setAngle(-m_driveSim.getHeading().getDegrees());
+
+                SmartDashboard.putNumber("Average Encoder Distance", getAverageEncoderDistance());
+                SmartDashboard.putNumber("Left speed", m_leftMotor.get());
+                SmartDashboard.putNumber("Right speed", m_leftMotor.get());
         }
 
-        /**
-         * @return The right encoder position (meters)
-         */
-        public double getRightEncoderPosition() {
-                return m_masterRight.getSelectedSensorPosition(DriveConstants.kSlotID) * DriveConstants.kEncoderPositionConversionFactor; //TODO might need to negate
+        public void tankDrive(double leftSpeed, double rightSpeed){
+                m_leftMotor.set(leftSpeed);
+                m_rightMotor.set(rightSpeed);
         }
 
-        /**
-         * @return The average encoder distance of both encoders (meters)
-         */
-        public double getAverageEncoderDistance() {
-                return (getRightEncoderPosition() + getLeftEncoderPosition()) / 2.0;
+        public double getHeading(){
+                return m_gyroSim.getAngle();
         }
 
-        /**
-         * @return The velocity of the left encoder (meters/s)
-         */
-        public double getLeftEncoderVelocity() {
-                return m_masterLeft.getSelectedSensorVelocity(DriveConstants.kSlotID) * DriveConstants.kEncoderVelocityConversionFactor;
+        public double getAverageEncoderDistance(){
+                return (m_leftEncoder.getDistance() + m_rightEncoder.getDistance())/2.0;
         }
 
-        /**
-         * @return The velocity of the right encoder (meters/s)
-         */
-        public double getRightEncoderVelocity() {
-                return m_masterRight.getSelectedSensorVelocity(DriveConstants.kSlotID) * DriveConstants.kEncoderVelocityConversionFactor;
-                //might need to negative this value
-        }
-
-        /**
-         * @return Pose of the robot
-         */
-        public Pose2d getPose() {
-                return m_odometry.getPoseMeters();
-        }
-
-        /**
-         * @return Wheel speeds of the robot
-         */
-        public DifferentialDriveWheelSpeeds getWheelSpeeds() {
-                return new DifferentialDriveWheelSpeeds(getLeftEncoderVelocity(), getRightEncoderVelocity());
-        }
-
-        /**
-         * @return The heading of the gyro (degrees)
-         */
-        public double getHeading() {
-                return m_gyro.getYaw() * (DriveConstants.kGyroReversed ? -1.0 : 1.0);
-        }
-
-        /**
-         * @return The rate of the gyro turn (deg/s)
-         */
-        public double getTurnRate() {
-                return m_gyro.getRate() * (DriveConstants.kGyroReversed ? -1.0 : 1.0);
-        }
-
-        /**
-         * Sets both encoders to 0
-         */
-        public void resetEncoders() {
-                m_masterLeft.setSelectedSensorPosition(0);
-                m_masterRight.setSelectedSensorPosition(0);
-        }
-
-        /**
-         * @param pose Pose to set the robot to
-         */
-        public void resetOdometry(Pose2d pose) {
-                resetEncoders();
-                m_odometry.resetPosition(pose, Rotation2d.fromDegrees(getHeading()));
-        }
-
-        /**
-         * @param straight Straight percent output
-         * @param left     Left percent output
-         * @param right    Right percent output
-         */
-        public void arcadeDrive(double straight, double left, double right) {
-                tankDrive(DriveConstants.kSpeedLimitFactor * (straight - left + right),
-                                DriveConstants.kSpeedLimitFactor * (straight + left - right));
-        }
-
-        /**
-         * @param leftSpeed  Left motors percent output
-         * @param rightSpeed Right motors percent output
-         */
-        public void tankDrive(double leftSpeed, double rightSpeed) {
-                m_masterLeft.set(ControlMode.PercentOutput, leftSpeed);
-                m_masterRight.set(ControlMode.PercentOutput, rightSpeed);
-                m_followerLeft.set(m_masterLeft.getMotorOutputPercent());
-                m_followerRight.set(m_masterRight.getMotorOutputPercent());
-
-        }
-
-        public void setWheelSpeeds(DifferentialDriveWheelSpeeds wheelSpeeds) {
-                m_masterRight.set(ControlMode.Velocity, wheelSpeeds.leftMetersPerSecond);
-                m_masterLeft.set(ControlMode.Velocity, wheelSpeeds.rightMetersPerSecond);
-                m_followerLeft.set(m_masterLeft.getMotorOutputPercent());
-                m_followerRight.set(m_masterRight.getMotorOutputPercent());
-               
-        }
-
-        public void configureShuffleboard() {
-                ShuffleboardTab shuffleboardTab = Shuffleboard.getTab("Drive");
-                shuffleboardTab.addNumber("Left speed", () -> getWheelSpeeds().leftMetersPerSecond).withSize(4, 2)
-                                .withPosition(0, 0).withWidget(BuiltInWidgets.kGraph);
-                shuffleboardTab.addNumber("Right speed", () -> getWheelSpeeds().rightMetersPerSecond).withSize(4, 2)
-                                .withPosition(4, 0).withWidget(BuiltInWidgets.kGraph);
-                shuffleboardTab.addNumber("Left motor speed", () -> getLeftEncoderPosition()).withSize(1, 1)
-                                .withPosition(0, 2).withWidget(BuiltInWidgets.kTextView);
-                shuffleboardTab.addNumber("Right motor speed", () -> getRightEncoderPosition()).withSize(1, 1)
-                                .withPosition(1, 2).withWidget(BuiltInWidgets.kTextView);
-                shuffleboardTab.addNumber("Heading", () -> getHeading()).withSize(1, 1).withPosition(2, 2)
-                                .withWidget(BuiltInWidgets.kTextView);
-        }
 }

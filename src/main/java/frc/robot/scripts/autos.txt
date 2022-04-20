@@ -1,18 +1,18 @@
 DriveSquare
 	sequential
-		drive 150
-		turn 90
-		drive 150
-		turn 180
-		drive 150
+		drive 3.81
 		turn -90
-		drive 150
-		turn 0
+		drive 3.81
+		turn -180
+		drive 3.81
+		turn -270
+		drive 3.81
+		turn -360
 DriveTriangle
 	sequential
-		drive 150
-		turn 120
-		drive 150
-		turn -60
-		drive 150
-		turn 0
+		drive 3.8
+		turn -120
+		drive 3.8
+		turn -240
+		drive 3.8
+		turn -360

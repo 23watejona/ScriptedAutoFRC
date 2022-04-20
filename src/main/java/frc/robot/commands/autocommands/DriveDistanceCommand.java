@@ -18,6 +18,8 @@ public class DriveDistanceCommand extends CommandBase {
 
   private ProfiledPIDController m_controller;
 
+  private double startEndoderDistance;
+
   /** Creates a new DriveDistanceCommand. */
   public DriveDistanceCommand(double distance) {
     m_distance = distance;
@@ -33,20 +35,20 @@ public class DriveDistanceCommand extends CommandBase {
   @Override
   public void initialize() {
     System.out.println("Running Distance Drive Command");
-    DriveSubsystem.get().resetEncoders();
+    startEndoderDistance = DriveSubsystem.get().getAverageEncoderDistance();
     double kP = .1;
     double kI = 0.000;
     double kD = 0.00;
 
     m_controller = new ProfiledPIDController(
         kP, kI, kD,
-        new TrapezoidProfile.Constraints(125, 150)); //was 196 35 
+        new TrapezoidProfile.Constraints(3.17, 3.81)); //was 196 35 
   }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
   public void execute() {
-    double output = m_controller.calculate(DriveSubsystem.get().getAverageEncoderDistance(), m_distance);
+    double output = m_controller.calculate((DriveSubsystem.get().getAverageEncoderDistance()-startEndoderDistance), m_distance);
     DriveSubsystem.get().tankDrive(output, output);
 
   }
@@ -61,6 +63,6 @@ public class DriveDistanceCommand extends CommandBase {
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    return Math.abs(DriveSubsystem.get().getAverageEncoderDistance()) > Math.abs(m_distance);
+    return Math.abs((DriveSubsystem.get().getAverageEncoderDistance()-startEndoderDistance)) >= Math.abs(m_distance);
   }
 }
