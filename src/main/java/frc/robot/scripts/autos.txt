@@ -1,18 +1,21 @@
+//Drive in a square
 DriveSquare
 	sequential
-		drive 3.81
+		drive 4
 		turn -90
-		drive 3.81
+		drive 4
 		turn -180
-		drive 3.81
+		drive 4
 		turn -270
-		drive 3.81
+		drive 4
 		turn -360
+
+//Drive in a triangle
 DriveTriangle
 	sequential
-		drive 3.8
+		drive 4
 		turn -120
-		drive 3.8
+		drive 4
 		turn -240
-		drive 3.8
+		drive 4
 		turn -360

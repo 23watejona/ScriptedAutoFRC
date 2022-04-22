@@ -6,9 +6,16 @@ import edu.wpi.first.wpilibj2.command.Command
 //all the imports necessary to build the auto command
 //eg. sequentialCommandGroup, any commands you are running, etc
 //make sure you use the full name (edu.wpi.first..., frc.robot...)
+//each binding should be in the format "[human readable name]" : "Command to replace that name"
+//Eg. "sequential" : "new SequentialCommandGroup()"
+
 bindingsAndImportsFile = new File('src/main/java/frc/robot/scripts/bindingsandimports.json')
 
 //Get a file which contains the autos you would like to build
+//Any commands which are nested as parameters to a different command
+//should be tabbed in once underneath that command
+//The level with no tabs should contain the name of the command only,
+//not any actual commands to be run
 autoFile = new File('src/main/java/frc/robot/scripts/autos.txt')
 
 //parse the JSON file
@@ -31,58 +38,61 @@ currInd = -1
 //go line by line through the text file
 autoText.eachLine{
 
-	//count and save the number of tab characters we currently see
-	tabs = it.count("\t")
+	//only do this if the line isn't empty and there are no "//"(comments)
+	if(it != "" && !it.contains("//")){
+		//count and save the number of tab characters we currently see
+		tabs = it.count("\t")
 
-	//if there are currently no tabs, this is a new Auto Command
-	if(tabs == 0){
-		//start saving in the next index of the array
-		currInd++
+		//if there are currently no tabs, this is a new Auto Command
+		if(tabs == 0){
+			//start saving in the next index of the array
+			currInd++
 
-		//add the necessary end parentheses for the last command
-		if(currInd > 0){
-			commandText[currInd - 1] += ")".repeat(lastTabs)
+			//add the necessary end parentheses for the last command
+			if(currInd > 0){
+				commandText[currInd - 1] += ")".repeat(lastTabs)
+			}
+			
+			//save the name of this auto
+			name[currInd] = it
+
+			//start off the string at this array index
+			//otherwise we will get "null" at the beginning of our string
+			commandText[currInd] = ""
+
+		} else{
+
+			//if this command is at the same level as the last command,
+			//close the last command and continue forward
+			//if this command is a level below the last command,
+			//don't close the last command, as this command should go inside the last command
+			//if this command is at a level above the last command
+			//close the last command and the ones for the levels we've now moved to
+			if(lastTabs == tabs){
+				commandText[currInd] += "), "
+			}else if(lastTabs > tabs){
+				commandText[currInd] += ")".repeat(lastTabs - tabs + 1) + ", "
+			}
+
+			//split the line into the command and the parameter(if applicable)
+			ar = it.split(" ")
+			command = ar[0].replace("\t", "")
+
+			//search the command bindings for the binding to your current desired command
+			commandFromBinding = bindingsAndImports.CommandBindings.find{it.key == command}.value
+			
+			//if we have a parameter to the command replace the param in the binding to the actual parameter we want
+			//otherwise just a the command, minus its end parenthesis
+			if(ar.size() > 1){
+				commandText[currInd] += commandFromBinding.substring(0,commandFromBinding.length()-1).replace("param", ar[1])
+			}else{
+				commandText[currInd] += commandFromBinding.substring(0,commandFromBinding.length()-1)
+			}
+
+			
 		}
-		
-		//save the name of this auto
-		name[currInd] = it
-
-		//start off the string at this array index
-		//otherwise we will get "null" at the beginning of our string
-		commandText[currInd] = ""
-
-	} else{
-
-		//if this command is at the same level as the last command,
-		//close the last command and continue forward
-		//if this command is a level below the last command,
-		//don't close the last command, as this command should go inside the last command
-		//if this command is at a level above the last command
-		//close the last command and the ones for the levels we've now moved to
-		if(lastTabs == tabs){
-			commandText[currInd] += "), "
-		}else if(lastTabs > tabs){
-			commandText[currInd] += ")".repeat(lastTabs - tabs + 1) + ", "
-		}
-
-		//split the line into the command and the parameter(if applicable)
-		ar = it.split(" ")
-		command = ar[0].replace("\t", "")
-
-		//search the command bindings for the binding to your current desired command
-		commandFromBinding = bindingsAndImports.CommandBindings.find{it.key == command}.value
-		
-		//if we have a parameter to the command replace the param in the binding to the actual parameter we want
-		//otherwise just a the command, minus its end parenthesis
-		if(ar.size() > 1){
-			commandText[currInd] += commandFromBinding.substring(0,commandFromBinding.length()-1).replace("param", ar[1])
-		}else{
-			commandText[currInd] += commandFromBinding.substring(0,commandFromBinding.length()-1)
-		}
-
-		
+		lastTabs = tabs	
 	}
-	lastTabs = tabs	
 }
 //add the necessary end parentheses for the last command
 commandText[currInd] += ")".repeat(lastTabs)
@@ -92,9 +102,6 @@ imports = ""
 bindingsAndImports.Imports.each{
 	imports += "import " + it + "; "
 }
-
-//create a Dictionary to hold our output commands
-output = new Hashtable<String,Command>()
 
 ind = 0
 for(i in commandText){

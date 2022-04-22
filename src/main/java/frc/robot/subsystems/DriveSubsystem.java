@@ -1,20 +1,9 @@
 package frc.robot.subsystems;
 
-import com.ctre.phoenix.motorcontrol.ControlMode;
-import com.ctre.phoenix.motorcontrol.FeedbackDevice;
-import com.ctre.phoenix.motorcontrol.NeutralMode;
-import com.ctre.phoenix.motorcontrol.SupplyCurrentLimitConfiguration;
-import com.ctre.phoenix.motorcontrol.can.TalonSRX;
-import com.kauailabs.navx.frc.AHRS;
-import com.revrobotics.CANSparkMax;
-import com.revrobotics.CANSparkMax.IdleMode;
-import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.DifferentialDriveOdometry;
-import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.AnalogGyro;
@@ -27,12 +16,14 @@ import edu.wpi.first.wpilibj.simulation.EncoderSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Constants.DriveConstants;
 
 public class DriveSubsystem extends SubsystemBase {
         private static DriveSubsystem s_subsystem;
 
         public static DriveSubsystem get() {
+                if(s_subsystem == null){
+                        s_subsystem = new DriveSubsystem();
+                }
                 return s_subsystem;
         }
 
@@ -41,7 +32,7 @@ public class DriveSubsystem extends SubsystemBase {
                         7.29, // 7.29:1 gearing reduction.
                         7.5, // MOI of 7.5 kg m^2 (from CAD model).
                         60.0, // The mass of the robot is 60 kg.
-                        Units.inchesToMeters(3), // The robot uses 3" radius wheels.
+                        Units.inchesToMeters(4), // The robot uses 3" radius wheels.
                         0.7112, // The track width is 0.7112 meters.
 
                         // The standard deviations for measurement noise:
@@ -49,7 +40,7 @@ public class DriveSubsystem extends SubsystemBase {
                         // heading: 0.001 rad
                         // l and r velocity: 0.1 m/s
                         // l and r position: 0.005 m
-                        VecBuilder.fill(0, 0, 0, 0, 0, 0, 0));
+                        VecBuilder.fill(0.001, 0.001, 0, 0.1, 0.1, 0.005, 0.005));
         private PWMSparkMax m_leftMotor = new PWMSparkMax(0);
         private PWMSparkMax m_rightMotor = new PWMSparkMax(1);
 
@@ -82,6 +73,8 @@ public class DriveSubsystem extends SubsystemBase {
         public DriveSubsystem() {
                 s_subsystem = this;
                 SmartDashboard.putData("Field", m_field);
+                m_leftEncoder.setDistancePerPulse(2 * Math.PI * Units.inchesToMeters(4) / 4096);
+                m_rightEncoder.setDistancePerPulse(2 * Math.PI * Units.inchesToMeters(4) / 4096);
 
         }
 
@@ -117,6 +110,8 @@ public class DriveSubsystem extends SubsystemBase {
                 SmartDashboard.putNumber("Average Encoder Distance", getAverageEncoderDistance());
                 SmartDashboard.putNumber("Left speed", m_leftMotor.get());
                 SmartDashboard.putNumber("Right speed", m_leftMotor.get());
+                SmartDashboard.putNumber("Left pos", m_driveSim.getLeftPositionMeters());
+                SmartDashboard.putNumber("Right pos", m_driveSim.getRightPositionMeters());
         }
 
         public void tankDrive(double leftSpeed, double rightSpeed){
